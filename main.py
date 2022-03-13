@@ -1,16 +1,5 @@
 import turtle
-import math
 from queue import PriorityQueue, Queue
-
-WIDTH = 800
-PEN = turtle.Turtle()
-
-RED = '#ff0000'
-BLACK = '#000000'
-GREEN = '#00ff00'
-WHITE = '#ffffff'
-ORANGE = '#ffa500'
-GREY = '#808080'
 
 
 def draw_rect(pen, color, x, y, width, height):
@@ -105,6 +94,9 @@ class Spot:
     def make_path(self):
         self.color = GREEN
 
+    def clear(self):
+        self.color = WHITE
+
     def draw(self, pen):
         if self.color != WHITE:
             draw_rect(pen, self.color, self.x, self.y, self.width, self.width)
@@ -158,7 +150,7 @@ def draw(pen, grid, rows, cols, width):
 
 
 def bresenham_line_gen(grid, start, end):
-    # roguebasin.com/index.php/Bresenham%27s_Line_Algorithm#Python
+    # reference: roguebasin.com/index.php/Bresenham%27s_Line_Algorithm#Python
     # Setup initial conditions
     x1, y1 = start
     x2, y2 = end
@@ -325,7 +317,6 @@ def uniform_cost_search(grid, start, end):
     came_from = {}
     g_score = {spot: float("inf") for row in grid for spot in row}
     g_score[start] = 0
-    # delete f_score because in this search f(n) = g(n)
 
     open_set_hash = {start}
 
@@ -355,7 +346,6 @@ def uniform_cost_search(grid, start, end):
 
 
 def breadth_first_search(start, end):
-    # delete count variable because now this use normal queue
     open_set = Queue()
     open_set.put(start)
     came_from = {}
@@ -384,37 +374,68 @@ def breadth_first_search(start, end):
     return False, -1
 
 
-def depth_limited_search(start, end, max_depth, path, visited):
-    if start == end:
-        return True, path
-
-    if max_depth <= 0:
-        return False, -1
-
-    for neighbor in start.neighbors:
-        if neighbor not in path and neighbor not in visited:
-            path[neighbor] = start
-            result = depth_limited_search(neighbor, end, max_depth - 1, path, visited)
-            if result[0]:
-                return True, path
-
-    path.pop(start, None)
-    visited.append(start)
-    return False, -1
+def create_path(path):
+    came_from = {}
+    for i in range (len(path) - 1):
+        came_from[path[i + 1]] = path[i]
+    return came_from
 
 
-def iterative_deepening_search(start, end, max_depth):
-    for limit in range(max_depth):
-        path = {}
+def iterative_deepening_dfs(start, end, max_depth):
+    """
+    Implementation of iterative deepening DFS (depth-first search) algorithm to find the shortest path from a start to a target node..
+    Given a start node, this returns the node in the tree below the start node with the target value (or null if it doesn't exist)
+    Runs in O(n), where n is the number of nodes in the tree, or O(b^d), where b is the branching factor and d is the depth.
+    :param start:  the node to start the search from
+    :param target: the value to search for
+    :return: The node containing the target value or null if it doesn't exist.
+    """
+    for depth in range (max_depth):
         visited = []
-        result = depth_limited_search(start, end, limit, path, visited)
-        if result[0]:
-            cost = reconstruct_path(path, end)
+        result, bottom_reached = iterative_deepening_dfs_rec(start, end, 0, depth, visited)
+        if result is not None:
+            came_from = create_path(visited)
+            cost = reconstruct_path(came_from, result)
             start.make_start()
             end.make_end()
-            return result[0], cost
+            return True, cost
+
+        if bottom_reached:
+            return False, -1
 
     return False, -1
+
+
+def count(visited, neighbors):
+    count = len(neighbors)
+    for neighbor in neighbors:
+        if neighbor in visited:
+            count -= 1
+    return count
+
+
+def iterative_deepening_dfs_rec(current, target, current_depth, max_depth, visited):
+    visited.append(current)
+
+    if current == target:
+        return current, True
+
+    if current_depth == max_depth:
+        visited.remove(current)
+        if count(visited, current.neighbors) > 0:
+            return None, False
+        else:
+            return None, True
+
+    bottom_reached = True
+    for neighbor in current.neighbors:
+        if neighbor not in visited:
+            result, bottom_reached_rec = iterative_deepening_dfs_rec(neighbor, target, current_depth + 1, max_depth, visited)
+            if result is not None:
+                return result, True
+            bottom_reached = bottom_reached and bottom_reached_rec
+    visited.remove(current)
+    return None, bottom_reached
 
 
 def menu():
@@ -445,13 +466,21 @@ def menu():
 
 
 if __name__ == "__main__":
+    WIDTH = 800
+
+    RED = '#ff0000'
+    BLACK = '#000000'
+    GREEN = '#00ff00'
+    WHITE = '#ffffff'
+    ORANGE = '#ffa500'
+    GREY = '#808080'
+
     data = get_data_from_file('input.txt')
     cols, rows = data[0]
     x_start, y_start, x_goal, y_goal = data[1]
     cols += 1
     rows += 1
 
-    setup_window_size_and_turtle(PEN, rows, cols, WIDTH)
     grid = make_grid(rows, cols, WIDTH)
     make_grid_border(grid, rows, cols)
     grid[x_start][y_start].make_start()
@@ -475,11 +504,15 @@ if __name__ == "__main__":
     elif user_choice == 2:
         result = uniform_cost_search(grid, grid[x_start][y_start], grid[x_goal][y_goal])
     elif user_choice == 3:
-        result = iterative_deepening_search(grid[x_start][y_start], grid[x_goal][y_goal], 50)
+        result = iterative_deepening_dfs(grid[x_start][y_start], grid[x_goal][y_goal], 50)
     elif user_choice == 4:
         result = greedy_best_first_search(grid, grid[x_start][y_start], grid[x_goal][y_goal])
     elif user_choice == 5:
         result = a_star_search(grid, grid[x_start][y_start], grid[x_goal][y_goal])
+
+
+    PEN = turtle.Turtle()
+    setup_window_size_and_turtle(PEN, rows, cols, WIDTH)
 
     draw(PEN, grid, rows, cols, WIDTH)
 
